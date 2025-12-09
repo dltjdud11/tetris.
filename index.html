@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>모바일 테트리스 게임 (최종 버그 수정)</title>
+    <title>모바일 테트리스 게임 (최종 5차 안정화)</title>
     
     <style>
         /* CSS 스타일 (변동 없음) */
@@ -159,7 +159,6 @@
             down: document.getElementById('down'),
         };
 
-        // --- 테트로미노 모양 정의 --- (변동 없음)
         const TETROMINOS = [
             [[1, COLS + 1, COLS * 2 + 1, 2], [COLS, COLS * 2, COLS * 2 + 1, COLS * 2 + 2], [1, COLS + 1, COLS * 2 + 1, COLS * 2], [COLS, COLS + 1, COLS + 2, COLS * 2 + 2]], // L
             [[1, COLS + 1, COLS * 2 + 1, 0], [COLS, COLS * 2, COLS + 1, COLS + 2], [1, COLS + 1, COLS * 2 + 1, COLS * 2 + 2], [COLS + 2, COLS * 2, COLS * 2 + 1, COLS * 2 + 2]], // J
@@ -219,7 +218,7 @@
             });
         }
 
-        // --- 충돌 감지 --- (변동 없음)
+        // --- 충돌 감지 ---
         function checkCollision(nextPosition, nextRotation, direction) {
             return currentTetromino[nextRotation].some(index => {
                 const targetIndex = nextPosition + index;
@@ -242,7 +241,7 @@
             });
         }
         
-        // --- 블록 이동 로직 ---
+        // --- 블록 이동/회전 로직 ---
         function move(direction) {
             if (!timerId) return;
             undraw();
@@ -254,7 +253,6 @@
             draw();
         }
 
-        // --- 블록 회전 로직 ---
         function rotate() {
             if (!timerId) return;
             undraw();
@@ -266,29 +264,32 @@
             draw();
         }
 
-        // --- 블록 하강 로직 ---
+        // --- 블록 하강 로직 (핵심 수정 부분) ---
         function fall() {
             undraw(); 
             let newPosition = currentPosition + COLS;
 
             if (checkCollision(newPosition, currentRotation, COLS)) {
-                // 충돌했으므로 블록을 고정하고, draw()를 호출하지 않습니다.
-                freeze();
+                // 충돌: 블록을 고정 (Freeze)합니다.
+                freeze(); 
+                
+                // 고정 후, 줄을 검사하고 상태 배열(gridState)을 변경합니다.
                 checkLines();
                 
-                // 블록을 고정했으니 DOM을 업데이트하여 사라지는 현상을 확실히 막습니다.
+                // gridState 변경 사항을 DOM에 즉시 반영하여 블록 사라짐을 방지합니다.
                 updateDOM(); 
                 
-                generateTetromino(); // 새 블록 생성
+                // 새 블록을 생성합니다.
+                generateTetromino(); 
                 
             } else {
-                // 충돌하지 않았으므로 위치를 업데이트하고 다시 그립니다.
+                // 미충돌: 위치를 업데이트하고 다시 그립니다.
                 currentPosition = newPosition;
                 draw();
             }
         }
 
-        // --- 블록 고정 (사라짐 문제 해결 핵심) ---
+        // --- 블록 고정 ---
         function freeze() {
             currentTetromino[currentRotation].forEach(index => {
                 const targetIndex = currentPosition + index;
@@ -299,7 +300,7 @@
             });
         }
 
-        // --- 줄 제거 및 점수 계산 ---
+        // --- 줄 제거 및 DOM 업데이트 ---
         function checkLines() {
             let linesCleared = 0;
             
@@ -312,7 +313,6 @@
                 if (isFull) {
                     linesCleared++;
                     
-                    // 해당 줄을 gridState에서 제거하고 맨 위에 새 빈 줄을 삽입
                     gridState.splice(rowStart, COLS);
                     const emptyRow = Array(COLS).fill(null);
                     gridState.unshift(...emptyRow);
@@ -322,18 +322,12 @@
             if (linesCleared > 0) {
                 score += linesCleared * 100;
                 scoreElement.textContent = score;
-
-                // gridState의 변경 사항을 DOM에 반영 (줄이 사라지고 블록이 내려옴)
-                updateDOM();
             }
         }
 
-        // --- DOM 업데이트 함수 (블록 사라짐 문제 해결 핵심) ---
         function updateDOM() {
             for (let i = 0; i < COLS * ROWS; i++) {
-                // 1. 모든 셀의 클래스를 초기화합니다.
                 gameBoard[i].className = 'cell'; 
-                // 2. gridState에 저장된 고정 블록만 다시 그립니다.
                 if (gridState[i] !== null) {
                     gameBoard[i].classList.add(gridState[i]);
                 }
@@ -348,7 +342,7 @@
             alert(`Game Over! Score: ${score}`);
         }
 
-        // --- 이벤트 리스너 ---
+        // --- 이벤트 리스너 (버튼 작동 오류 수정) ---
 
         // PC 키보드 이벤트
         document.addEventListener('keydown', (e) => {
@@ -360,28 +354,27 @@
             else if (e.key === 'ArrowUp') rotate();
         });
 
-        // **버튼 작동 오류 수정: touchstart와 click 이벤트를 모두 사용하여 PC/모바일을 포괄**
-
-        function handleControlAction(action) {
+        // **PC 마우스 클릭 및 모바일 터치 이벤트를 통합 처리**
+        function handleControlAction(e, action) {
+            e.preventDefault(); // 터치/마우스 클릭 시 브라우저 기본 동작 방지
             if (!timerId) return;
-            // 액션 실행
+
             if (action === 'left') move(-1);
             else if (action === 'right') move(1);
             else if (action === 'down') fall();
             else if (action === 'rotate') rotate();
         }
 
-        // 모바일 터치 이벤트 리스너 (터치 오류 방지)
-        controls.left.addEventListener('touchstart', (e) => { e.preventDefault(); handleControlAction('left'); });
-        controls.right.addEventListener('touchstart', (e) => { e.preventDefault(); handleControlAction('right'); });
-        controls.down.addEventListener('touchstart', (e) => { e.preventDefault(); handleControlAction('down'); });
-        controls.rotate.addEventListener('touchstart', (e) => { e.preventDefault(); handleControlAction('rotate'); });
-
-        // PC 마우스 클릭 이벤트 리스너 (마우스 클릭 작동 보장)
-        controls.left.addEventListener('click', () => { handleControlAction('left'); });
-        controls.right.addEventListener('click', () => { handleControlAction('right'); });
-        controls.down.addEventListener('click', () => { handleControlAction('down'); });
-        controls.rotate.addEventListener('click', () => { handleControlAction('rotate'); });
+        // 이벤트 리스너 등록: touchstart (모바일)와 click (PC 마우스) 모두 등록
+        controls.left.addEventListener('touchstart', (e) => handleControlAction(e, 'left'));
+        controls.right.addEventListener('touchstart', (e) => handleControlAction(e, 'right'));
+        controls.down.addEventListener('touchstart', (e) => handleControlAction(e, 'down'));
+        controls.rotate.addEventListener('touchstart', (e) => handleControlAction(e, 'rotate'));
+        
+        controls.left.addEventListener('click', (e) => handleControlAction(e, 'left'));
+        controls.right.addEventListener('click', (e) => handleControlAction(e, 'right'));
+        controls.down.addEventListener('click', (e) => handleControlAction(e, 'down'));
+        controls.rotate.addEventListener('click', (e) => handleControlAction(e, 'rotate'));
 
 
         // 게임 시작/일시정지 버튼
