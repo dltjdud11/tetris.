@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>모바일 테트리스 게임 (최종 수정)</title>
+    <title>모바일 테트리스 게임 (최종 안정화)</title>
     
     <style>
         /* CSS 스타일: 이전 버전과 동일 */
@@ -141,7 +141,7 @@
         const ROWS = 20;
         let score = 0;
         let gameBoard = []; 
-        let gridState = Array(COLS * ROWS).fill(null); // 고정된 블록 상태 저장
+        let gridState = Array(COLS * ROWS).fill(null); 
         
         let currentTetromino;
         let currentTetrominoName;
@@ -201,6 +201,7 @@
         }
 
         // --- 블록 그리기/지우기 ---
+        // 그리기: DOM에 블록 클래스 추가
         function draw() {
             currentTetromino[currentRotation].forEach(index => {
                 const targetIndex = currentPosition + index;
@@ -210,6 +211,7 @@
             });
         }
 
+        // 지우기: DOM에서 블록 클래스 제거
         function undraw() {
             currentTetromino[currentRotation].forEach(index => {
                 const targetIndex = currentPosition + index;
@@ -219,29 +221,30 @@
             });
         }
 
-        // --- 충돌 감지 (최종 수정) ---
+        // --- 충돌 감지 ---
         // direction: -1(좌), 1(우), COLS(하), 0(회전)
         function checkCollision(nextPosition, nextRotation, direction) {
             return currentTetromino[nextRotation].some(index => {
                 const targetIndex = nextPosition + index;
                 const nextCol = targetIndex % COLS;
-                const nextRow = Math.floor(targetIndex / COLS);
                 
                 // 1. 보드 바닥을 넘었는지
                 if (targetIndex >= COLS * ROWS) return true;
                 
                 // 2. 이미 고정된 블록에 충돌하는지
+                // targetIndex가 음수가 아닌지 (가끔 -COLS가 될 수 있음) && gridState에 이미 블록이 있는지 확인
                 if (targetIndex >= 0 && gridState[targetIndex] !== null) return true;
 
                 // 3. 벽 충돌 (좌/우 이동 시)
                 const currentCol = (currentPosition + index) % COLS;
 
                 if (direction === -1) { // 왼쪽 이동 시
-                    if (nextCol === COLS - 1 && currentCol === 0) return true; // 왼쪽 끝에서 오른쪽 끝으로 넘어가는 경우 방지
-                    if (nextCol > currentCol) return true; // (버그 수정: 실제 블록이 좌우 경계를 넘어갈 때 발생)
+                    // 다음 열 위치가 현재 열 위치보다 크거나 같으면 (벽을 넘어 반대편으로 가려고 할 때) 충돌
+                    if (nextCol > currentCol) return true; 
+                    if (nextCol === COLS - 1) return true; // 이 경우는 충돌이 아니라 넘어가는 것을 방지
                 } else if (direction === 1) { // 오른쪽 이동 시
-                    if (nextCol === 0 && currentCol === COLS - 1) return true; // 오른쪽 끝에서 왼쪽 끝으로 넘어가는 경우 방지
-                    if (nextCol < currentCol) return true;
+                    if (nextCol < currentCol) return true; // 다음 열 위치가 현재 열 위치보다 작으면 (벽을 넘어 반대편으로 가려고 할 때) 충돌
+                    if (nextCol === 0) return true; // 이 경우도 충돌이 아니라 넘어가는 것을 방지
                 }
                 
                 return false;
@@ -274,26 +277,38 @@
 
         // --- 블록 하강 로직 ---
         function fall() {
-            undraw();
+            // 하강하기 전 현재 위치의 블록을 지웁니다.
+            undraw(); 
             let newPosition = currentPosition + COLS;
 
             if (checkCollision(newPosition, currentRotation, COLS)) {
-                // 충돌했으므로 블록 고정
+                // 충돌했으므로 (바닥 또는 다른 블록에 닿음) 블록을 고정합니다.
+                
+                // *중요*: 고정하기 전에 draw()를 호출하지 않습니다. 
+                // freeze()가 gridState와 DOM에 최종 위치를 반영합니다.
+                
                 freeze();
                 checkLines();
-                generateTetromino(); 
+                generateTetromino(); // 새 블록 생성
+                
             } else {
+                // 충돌하지 않았으므로 위치를 업데이트하고 다시 그립니다.
                 currentPosition = newPosition;
+                draw();
             }
-            draw();
         }
 
-        // --- 블록 고정 ---
+        // --- 블록 고정 (사라짐 문제의 핵심 수정) ---
         function freeze() {
             currentTetromino[currentRotation].forEach(index => {
                 const targetIndex = currentPosition + index;
                 if (targetIndex >= 0 && targetIndex < COLS * ROWS) {
+                    // 1. gridState에 영구적으로 블록 이름을 저장합니다.
                     gridState[targetIndex] = currentTetrominoName;
+                    
+                    // 2. DOM에도 최종 클래스를 추가하여 사라지지 않도록 합니다.
+                    // (이 클래스는 updateDOM()에서 다시 설정되지만, 즉시 시각적 고정 효과를 줍니다.)
+                    gameBoard[targetIndex].classList.add(currentTetrominoName);
                 }
             });
         }
@@ -322,7 +337,7 @@
                 score += linesCleared * 100;
                 scoreElement.textContent = score;
 
-                // gridState의 변경 사항을 DOM에 반영
+                // gridState의 변경 사항을 DOM에 반영 (줄이 사라지고 블록이 내려옴)
                 updateDOM();
             }
         }
@@ -330,7 +345,7 @@
         // --- DOM 업데이트 함수 ---
         function updateDOM() {
             for (let i = 0; i < COLS * ROWS; i++) {
-                gameBoard[i].className = 'cell'; 
+                gameBoard[i].className = 'cell'; // 모든 셀 초기화 (사라지는 현상 방지)
                 if (gridState[i] !== null) {
                     gameBoard[i].classList.add(gridState[i]);
                 }
@@ -358,6 +373,7 @@
         });
 
         // 모바일/터치 버튼 이벤트 (touchstart 사용 및 preventDefault로 터치 오류 방지)
+        // **touch-action: manipulation;** CSS와 **e.preventDefault()** 조합으로 터치 오류를 해결합니다.
         controls.left.addEventListener('touchstart', (e) => { e.preventDefault(); move(-1); });
         controls.right.addEventListener('touchstart', (e) => { e.preventDefault(); move(1); });
         controls.down.addEventListener('touchstart', (e) => { e.preventDefault(); fall(); });
