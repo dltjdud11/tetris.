@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>모바일 테트리스 게임 (최종)</title>
+    <title>모바일 테트리스 게임 (안정화)</title>
     
     <style>
-        /* 기본 레이아웃 및 스타일 (이전 버전과 유사하나 최적화) */
+        /* CSS: 이전 버전과 동일하며 모바일 최적화 유지 */
         body {
             display: flex;
             flex-direction: column;
@@ -101,7 +101,6 @@
             height: 60px;
         }
 
-        /* 모바일 화면 최적화 */
         @media (max-width: 600px) {
             #game-board, .info-panel {
                 width: 90vw; 
@@ -141,8 +140,8 @@
         const COLS = 10;
         const ROWS = 20;
         let score = 0;
-        let gameBoard = []; // DOM 셀 요소 저장
-        let gridState = Array(COLS * ROWS).fill(null); // 각 셀의 상태(null 또는 블록 이름) 저장
+        let gameBoard = []; 
+        let gridState = Array(COLS * ROWS).fill(null); // 고정된 블록 상태 저장
         
         let currentTetromino;
         let currentTetrominoName;
@@ -160,14 +159,14 @@
             down: document.getElementById('down'),
         };
 
-        // --- 테트로미노 모양 정의 (이전과 동일) ---
+        // --- 테트로미노 모양 정의 ---
         const TETROMINOS = [
             [[1, COLS + 1, COLS * 2 + 1, 2], [COLS, COLS * 2, COLS * 2 + 1, COLS * 2 + 2], [1, COLS + 1, COLS * 2 + 1, COLS * 2], [COLS, COLS + 1, COLS + 2, COLS * 2 + 2]], // L
             [[1, COLS + 1, COLS * 2 + 1, 0], [COLS, COLS * 2, COLS + 1, COLS + 2], [1, COLS + 1, COLS * 2 + 1, COLS * 2 + 2], [COLS + 2, COLS * 2, COLS * 2 + 1, COLS * 2 + 2]], // J
             [[1, COLS, COLS + 1, COLS + 2], [1, COLS + 1, COLS * 2 + 1, COLS + 2], [COLS, COLS + 1, COLS + 2, COLS * 2 + 1], [1, COLS, COLS + 1, COLS * 2 + 1]], // T
             [[COLS + 1, COLS + 2, COLS * 2, COLS * 2 + 1], [0, COLS, COLS + 1, COLS * 2 + 1]], // S
             [[COLS, COLS + 1, COLS * 2 + 1, COLS * 2 + 2], [1, COLS, COLS + 1, COLS * 2]], // Z
-            [[1, COLS + 1, COLS * 2 + 1, COLS * 3 + 1], [COLS, COLS + 1, COLS + 2, COLS + 3], [1, COLS + 1, COLS * 2 + 1, COLS * 3 + 1], [COLS, COLS + 1, COLS + 2, COLS + 3]], // I (4회전 정의)
+            [[1, COLS + 1, COLS * 2 + 1, COLS * 3 + 1], [COLS, COLS + 1, COLS + 2, COLS + 3], [1, COLS + 1, COLS * 2 + 1, COLS * 3 + 1], [COLS, COLS + 1, COLS + 2, COLS + 3]], // I
             [[0, 1, COLS, COLS + 1]] // O
         ];
         const TETROMINO_NAMES = ['L', 'J', 'T', 'S', 'Z', 'I', 'O'];
@@ -191,9 +190,9 @@
             currentTetromino = TETROMINOS[randomIndex];
             currentTetrominoName = TETROMINO_NAMES[randomIndex];
             currentRotation = 0;
-            currentPosition = 4; // 상단 중앙 시작
+            currentPosition = 4;
 
-            if (checkCollision(currentPosition)) {
+            if (checkCollision(currentPosition, currentRotation, 0)) { // 충돌 체크 시 이동 방향은 0으로 설정
                 gameOver();
                 return false;
             }
@@ -220,27 +219,28 @@
             });
         }
 
-        // --- 충돌 감지 (가장 중요한 함수) ---
-        function checkCollision(nextPosition, nextRotation = currentRotation) {
+        // --- 충돌 감지 (안정화) ---
+        // direction: -1(좌), 1(우), COLS(하), 0(회전)
+        function checkCollision(nextPosition, nextRotation, direction) {
             return currentTetromino[nextRotation].some(index => {
                 const targetIndex = nextPosition + index;
-                const row = Math.floor(targetIndex / COLS);
-                const col = targetIndex % COLS;
-                const currentRow = Math.floor((currentPosition + index) / COLS);
                 
                 // 1. 보드 바닥을 넘었는지
                 if (targetIndex >= COLS * ROWS) return true;
                 
-                // 2. 이미 고정된 블록에 충돌하는지 (null이 아니면 고정된 블록)
-                if (gridState[targetIndex] !== null) return true;
+                // 2. 이미 고정된 블록에 충돌하는지
+                if (targetIndex >= 0 && gridState[targetIndex] !== null) return true;
 
-                // 3. 벽 충돌 (좌/우)
-                // 현재 줄에서 다음 줄로 이동하지 않는데, 열 위치가 0(왼쪽 끝) 또는 9(오른쪽 끝)를 넘으려고 할 때
-                if (row !== currentRow) {
-                    // 왼쪽 경계 이동 체크: 왼쪽으로 이동 시 왼쪽 끝을 넘는 경우
-                    if (targetIndex % COLS === COLS - 1 && nextPosition < currentPosition) return true; 
-                    // 오른쪽 경계 이동 체크: 오른쪽으로 이동 시 오른쪽 끝을 넘는 경우
-                    if (targetIndex % COLS === 0 && nextPosition > currentPosition) return true;
+                // 3. 벽 충돌 (좌/우 이동 시)
+                const currentCol = (currentPosition + index) % COLS;
+                const nextCol = targetIndex % COLS;
+
+                if (direction === -1) { // 왼쪽 이동
+                    if (nextCol > currentCol) return true; // 왼쪽으로 이동했는데 오른쪽으로 넘어간 경우 (경계 오류)
+                    if (nextCol === COLS - 1) return true; // 다음 위치가 오른쪽 끝인 경우 (왼쪽 끝에서 넘어감 방지)
+                } else if (direction === 1) { // 오른쪽 이동
+                    if (nextCol < currentCol) return true; // 오른쪽으로 이동했는데 왼쪽으로 넘어간 경우
+                    if (nextCol === 0) return true; // 다음 위치가 왼쪽 끝인 경우
                 }
                 
                 return false;
@@ -253,15 +253,7 @@
             undraw();
             let newPosition = currentPosition + direction;
 
-            // 좌우 벽 충돌 방지 (정확한 구현)
-            const isAtLeftEdge = currentTetromino[currentRotation].some(index => (currentPosition + index) % COLS === 0) && direction === -1;
-            const isAtRightEdge = currentTetromino[currentRotation].some(index => (currentPosition + index) % COLS === COLS - 1) && direction === 1;
-
-            if (isAtLeftEdge || isAtRightEdge) {
-                newPosition = currentPosition;
-            }
-
-            if (!checkCollision(newPosition)) {
+            if (!checkCollision(newPosition, currentRotation, direction)) {
                 currentPosition = newPosition;
             }
             draw();
@@ -273,7 +265,7 @@
             undraw();
             const nextRotation = (currentRotation + 1) % currentTetromino.length;
 
-            if (!checkCollision(currentPosition, nextRotation)) {
+            if (!checkCollision(currentPosition, nextRotation, 0)) {
                 currentRotation = nextRotation;
             }
             draw();
@@ -284,7 +276,7 @@
             undraw();
             let newPosition = currentPosition + COLS;
 
-            if (checkCollision(newPosition)) {
+            if (checkCollision(newPosition, currentRotation, COLS)) { // COLS는 아래쪽 이동을 의미
                 // 충돌하면 블록 고정
                 freeze();
                 checkLines();
@@ -306,7 +298,7 @@
             });
         }
 
-        // --- 줄 제거 및 점수 계산 (안정화된 로직) ---
+        // --- 줄 제거 및 점수 계산 ---
         function checkLines() {
             let linesCleared = 0;
             
@@ -321,12 +313,7 @@
                 if (isFull) {
                     linesCleared++;
                     
-                    // 1. DOM에서 해당 줄의 블록 클래스 제거
-                    for (let j = rowStart; j < rowEnd; j++) {
-                        gameBoard[j].className = 'cell';
-                    }
-
-                    // 2. gridState 배열에서 해당 줄을 제거하고, 맨 앞에 새 빈 줄(null)을 삽입
+                    // 해당 줄을 gridState에서 제거하고 맨 위에 새 빈 줄(null)을 삽입
                     gridState.splice(rowStart, COLS);
                     const emptyRow = Array(COLS).fill(null);
                     gridState.unshift(...emptyRow);
@@ -337,7 +324,7 @@
                 score += linesCleared * 100;
                 scoreElement.textContent = score;
 
-                // 3. gridState의 변경 사항을 DOM에 반영 (전체 리렌더링)
+                // gridState의 변경 사항을 DOM에 반영 (전체 리렌더링)
                 updateDOM();
             }
         }
@@ -373,7 +360,7 @@
             else if (e.key === 'ArrowUp') rotate();
         });
 
-        // 모바일/터치 버튼 이벤트 (touchstart 사용: 더 빠른 반응)
+        // 모바일/터치 버튼 이벤트 (touchstart 사용 및 preventDefault 호출)
         controls.left.addEventListener('touchstart', (e) => { e.preventDefault(); move(-1); });
         controls.right.addEventListener('touchstart', (e) => { e.preventDefault(); move(1); });
         controls.down.addEventListener('touchstart', (e) => { e.preventDefault(); fall(); });
